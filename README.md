@@ -60,6 +60,24 @@ pnpm threadseer beat consequences "Mara reveals herself at the feast"
 pnpm threadseer beat kills "Mara reveals herself at the feast"
 ```
 
+Create and attach entities to beats:
+
+```bash
+threadseer beat entity create Character "Mara" "Hidden heir to the throne."
+threadseer beat entity create Faction "The northern houses"
+threadseer beat entity list
+threadseer beat entity attach -b beat-mara-reveals -e Mara
+threadseer beat entity for beat-mara-reveals
+```
+
+Entity types:
+
+```text
+Character
+Faction
+Location
+```
+
 Neo4j defaults come from `docker-compose.yml`:
 
 ```text

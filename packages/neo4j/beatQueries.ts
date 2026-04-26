@@ -38,14 +38,15 @@ export async function addBeat(
   }
 }
 
-export async function findBeat(driver: Driver, world: string, title: string): Promise<BeatView | null> {
+export async function findBeat(driver: Driver, world: string, reference: string): Promise<BeatView | null> {
   const session = driver.session({ database: configFromEnv().database });
 
   try {
     const result = await session.executeRead((tx) =>
       tx.run(
         `
-        MATCH (b:Beat {world: $world, title: $title})
+        MATCH (b:Beat {world: $world})
+        WHERE b.id = $reference OR b.title = $reference
         OPTIONAL MATCH (b)-[out]->(target)
         OPTIONAL MATCH (source)-[in]->(b)
         RETURN b {
@@ -64,7 +65,7 @@ export async function findBeat(driver: Driver, world: string, title: string): Pr
           labels: labels(source)
         }) AS incoming
         `,
-        { world, title },
+        { world, reference },
       ),
     );
 
@@ -91,9 +92,9 @@ export async function findBeat(driver: Driver, world: string, title: string): Pr
 export async function outgoingConsequences(
   driver: Driver,
   world: string,
-  title: string,
+  reference: string,
 ): Promise<Consequence[] | null> {
-  const beat = await findBeat(driver, world, title);
+  const beat = await findBeat(driver, world, reference);
   return beat?.outgoing ?? null;
 }
 

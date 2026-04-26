@@ -64,15 +64,34 @@ export function formatKills(beatTitle: string, consequences: Consequence[]): str
 }
 
 export function formatBeatView(view: BeatView): string {
+  const grouped = groupConsequences(view.outgoing);
+  const involved = grouped.get("INVOLVES") ?? [];
   const lines = [
     `Beat: ${view.title}`,
     `Status: ${view.status ?? "unknown"}`,
     "",
-    "Outgoing:",
+    "Involves:",
   ];
 
-  if (view.outgoing.length) {
-    lines.push(formatConsequences(view.title, view.outgoing).split("\n").slice(2).join("\n"));
+  if (involved.length) {
+    for (const consequence of involved) {
+      lines.push(`- ${consequence.type}: ${consequence.title}`);
+    }
+  } else {
+    lines.push("- No attached entities yet.");
+  }
+
+  lines.push(
+    "",
+    "Outgoing:",
+  );
+
+  const consequenceText = formatConsequences(view.title, view.outgoing)
+    .split("\n")
+    .slice(2)
+    .join("\n");
+  if (consequenceText.trim()) {
+    lines.push(consequenceText);
   } else {
     lines.push("- No outgoing consequences yet.");
   }

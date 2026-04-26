@@ -1,4 +1,15 @@
-export const nodeTypes = ["Beat", "Thread", "Pressure", "Secret", "State"] as const;
+export const entityTypes = ["Character", "Faction", "Location"] as const;
+
+export type EntityType = (typeof entityTypes)[number];
+
+export const nodeTypes = [
+  "Beat",
+  "Thread",
+  "Pressure",
+  "Secret",
+  "State",
+  ...entityTypes,
+] as const;
 
 export type NodeType = (typeof nodeTypes)[number];
 

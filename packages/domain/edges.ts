@@ -5,6 +5,7 @@ export const edgeTypes = [
   "REVEALS",
   "ESCALATES",
   "CREATES",
+  "INVOLVES",
 ] as const;
 
 export type EdgeType = (typeof edgeTypes)[number];
@@ -16,6 +17,7 @@ export const edgeDisplayNames: Record<EdgeType, string> = {
   REVEALS: "Reveals",
   ESCALATES: "Escalates",
   CREATES: "Creates",
+  INVOLVES: "Involves",
 };
 
 export const consequenceOrder: EdgeType[] = [

@@ -1,7 +1,7 @@
 import type { Driver, ManagedTransaction } from "neo4j-driver";
 
 import { type EdgeType, edgeTypes } from "../domain/edges.js";
-import { nodeTypes, type NodeType } from "../domain/nodes.js";
+import { entityTypes, nodeTypes, type NodeType } from "../domain/nodes.js";
 import { type SeedGraph, seedGraphSchema } from "../domain/schemas.js";
 import { configFromEnv } from "./connection.js";
 import { ensureSchema } from "./schema.js";
@@ -14,6 +14,10 @@ export const ashKingdomSeed = seedGraphSchema.parse({
     { id: "pressure-court-paranoia", type: "Pressure", title: "Court paranoia" },
     { id: "pressure-famine-unrest", type: "Pressure", title: "Famine unrest" },
     { id: "secret-mara-heir", type: "Secret", title: "Mara is the true heir" },
+    { id: "entity-mara", type: "Character", title: "Mara" },
+    { id: "entity-regent", type: "Character", title: "The regent" },
+    { id: "entity-northern-houses", type: "Faction", title: "The northern houses" },
+    { id: "entity-feast-hall", type: "Location", title: "The feast hall" },
     {
       id: "beat-mara-reveals",
       type: "Beat",
@@ -71,6 +75,10 @@ export const ashKingdomSeed = seedGraphSchema.parse({
     { from: "beat-mara-reveals", type: "BLOCKS", to: "beat-mara-secret" },
     { from: "beat-mara-reveals", type: "BLOCKS", to: "beat-mara-evidence" },
     { from: "beat-mara-reveals", type: "BLOCKS", to: "beat-regent-exposes" },
+    { from: "beat-mara-reveals", type: "INVOLVES", to: "entity-mara" },
+    { from: "beat-mara-reveals", type: "INVOLVES", to: "entity-feast-hall" },
+    { from: "beat-regent-fraud", type: "INVOLVES", to: "entity-regent" },
+    { from: "beat-northern-houses", type: "INVOLVES", to: "entity-northern-houses" },
     { from: "beat-assassin-feast", type: "ESCALATES", to: "pressure-court-paranoia" },
     { from: "pressure-famine-unrest", type: "ESCALATES", to: "thread-crown" },
   ],
@@ -101,12 +109,16 @@ export async function seedGraph(driver: Driver, graph: SeedGraph): Promise<void>
 
       for (const node of graph.nodes) {
         assertNodeType(node.type);
+        const labels = labelsForNodeType(node.type);
         await tx.run(
-          `CREATE (n:${node.type} {id: $id, world: $world, title: $title, status: $status})`,
+          `CREATE (n:${labels} {id: $id, world: $world, title: $title, name: $name, status: $status})`,
           {
             id: node.id,
             world: graph.world,
             title: node.title,
+            name: entityTypes.includes(node.type as (typeof entityTypes)[number])
+              ? node.title
+              : null,
             status: node.status ?? null,
           },
         );
@@ -119,6 +131,14 @@ export async function seedGraph(driver: Driver, graph: SeedGraph): Promise<void>
   } finally {
     await session.close();
   }
+}
+
+function labelsForNodeType(type: NodeType): string {
+  if (entityTypes.includes(type as (typeof entityTypes)[number])) {
+    return `Entity:${type}`;
+  }
+
+  return type;
 }
 
 function assertNodeType(type: NodeType): void {
