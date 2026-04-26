@@ -7,7 +7,7 @@ export const storyNodeSchema = z.object({
   id: z.string().min(1),
   type: z.enum(nodeTypes),
   title: z.string().min(1),
-  status: z.enum(["possible", "canon"]).optional(),
+  status: z.enum(["proposed", "live", "collapsed", "invalidated", "dormant"]).optional(),
 });
 
 export const storyEdgeSchema = z.object({
@@ -17,7 +17,11 @@ export const storyEdgeSchema = z.object({
 });
 
 export const seedGraphSchema = z.object({
-  world: z.string().min(1),
+  sourcebook: z.string().min(1),
+  sourcebookName: z.string().min(1),
+  sourcebookDescription: z.string().min(1),
+  game: z.string().min(1),
+  gameName: z.string().min(1),
   nodes: z.array(storyNodeSchema),
   edges: z.array(storyEdgeSchema),
 });

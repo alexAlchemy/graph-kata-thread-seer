@@ -2,15 +2,25 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
-export type CliConfig = {
-  activeWorld?: {
-    handle: string;
-    id: string;
-    name: string;
-  };
+export type ActiveSourcebook = {
+  handle: string;
+  id: string;
+  name: string;
 };
 
-export type ActiveWorld = NonNullable<CliConfig["activeWorld"]>;
+export type ActiveGame = {
+  handle: string;
+  id: string;
+  name: string;
+  sourcebook: string;
+};
+
+export type CliConfig = {
+  activeSourcebook?: ActiveSourcebook;
+  activeGame?: ActiveGame;
+  // legacy compatibility
+  activeWorld?: ActiveSourcebook;
+};
 
 export function configPath(): string {
   const root = process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
@@ -36,18 +46,37 @@ export async function writeConfig(config: CliConfig): Promise<void> {
   await writeFile(target, `${JSON.stringify(config, null, 2)}\n`, "utf8");
 }
 
-export async function setActiveWorld(world: CliConfig["activeWorld"]): Promise<void> {
+export async function setActiveSourcebook(sourcebook: ActiveSourcebook): Promise<void> {
   const config = await readConfig();
-  await writeConfig({ ...config, activeWorld: world });
+  await writeConfig({
+    ...config,
+    activeSourcebook: sourcebook,
+    activeWorld: sourcebook,
+  });
 }
 
-export async function requireActiveWorld(): Promise<ActiveWorld> {
+export async function setActiveGame(game: ActiveGame): Promise<void> {
   const config = await readConfig();
-  if (!config.activeWorld?.handle) {
-    throw new Error("Please set active world");
+  await writeConfig({ ...config, activeGame: game });
+}
+
+export async function requireActiveSourcebook(): Promise<ActiveSourcebook> {
+  const config = await readConfig();
+  const sourcebook = config.activeSourcebook ?? config.activeWorld;
+  if (!sourcebook?.handle) {
+    throw new Error("Please set active sourcebook");
   }
 
-  return config.activeWorld;
+  return sourcebook;
+}
+
+export async function requireActiveGame(): Promise<ActiveGame> {
+  const config = await readConfig();
+  if (!config.activeGame?.handle) {
+    throw new Error("Please set active game");
+  }
+
+  return config.activeGame;
 }
 
 function isMissingFile(error: unknown): boolean {

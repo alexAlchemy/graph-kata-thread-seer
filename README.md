@@ -1,142 +1,52 @@
 # graph-kata-thread-seer
-Graph-native narrative design tool for mapping story threads, pressures, secrets, canon beats, and possible futures.
+Graph-native narrative design tool for mapping sourcebook ingredients, game-local threads, beats, and event consequences.
 
-## Milestone 1: Beat Consequence Explorer
+## Milestone 2: Sourcebook-to-Game Lifecycle
 
-This slice answers the first useful graph question:
+This slice answers:
 
 ```text
 Given a possible beat, what does it unlock and what does it kill?
 ```
 
-## Run locally
+…and now does so in a game-local lifecycle:
 
-Install dependencies:
+```text
+Sourcebook thread seeds -> game threads -> proposed beats -> collapsed events.
+```
+
+## Run locally
 
 ```bash
 pnpm install
-```
-
-Start Neo4j:
-
-```bash
 docker compose up -d neo4j
-```
-
-Load the toy story world:
-
-```bash
 pnpm threadseer seed ash-kingdom
 ```
 
-Seeding also sets Ash Kingdom as the active world for later commands.
+The seed creates:
 
-Create a new empty story world:
+- Sourcebook: Ash Kingdom
+- Game: Ash Kingdom Demo Game
+- ThreadSeed: The Crown Without a King
+- GameThread instantiated from that seed
+- Demo game-local beats
 
-```bash
-threadseer world create "Ash Kingdom" "A brittle succession crisis under pressure from court paranoia and famine unrest."
-```
-
-Threadseer uses short generated application ids, such as `w_KL0lEnhTyh`, instead of slugs or Neo4j internal ids. The display name can change without changing the world identity.
-
-Set or inspect the active world:
+## Core commands
 
 ```bash
-threadseer world use "Ash Kingdom"
-threadseer world current
+threadseer game current
+threadseer sourcebook thread list
+threadseer game thread create --from "The Crown Without a King"
+threadseer game beat add "Mara reveals herself at the feast" --thread "The Crown Without a King"
+threadseer game beat consequences "Mara reveals herself at the feast"
+threadseer game beat kills "Mara reveals herself at the feast"
+threadseer game beat collapse "Mara reveals herself at the feast"
 ```
 
-World-scoped commands read the active world from local CLI config. If none is set, they return:
-
-```text
-Please set active world
-```
-
-Explore the seeded beat:
+Compatibility aliases still work:
 
 ```bash
-pnpm threadseer beat show "Mara reveals herself at the feast"
-pnpm threadseer beat consequences "Mara reveals herself at the feast"
-pnpm threadseer beat kills "Mara reveals herself at the feast"
-```
-
-Create and attach entities to beats:
-
-```bash
-threadseer beat entity create Character "Mara" "Hidden heir to the throne."
-threadseer beat entity create Faction "The northern houses"
-threadseer beat entity list
-threadseer beat entity attach -b beat-mara-reveals -e Mara
-threadseer beat entity for beat-mara-reveals
-```
-
-Entity types:
-
-```text
-Character
-Faction
-Location
-```
-
-Neo4j defaults come from `docker-compose.yml`:
-
-```text
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=threadseer-dev-password
-```
-
-## Install the CLI locally
-
-For day-to-day local development, link the package into your shell path:
-
-```bash
-pnpm install
-pnpm link --global
-```
-
-If pnpm has no global bin directory yet, set it to a directory on your `PATH` once:
-
-```bash
-pnpm config set global-bin-dir ~/.local/bin
-```
-
-Then you can run:
-
-```bash
-threadseer help
-threadseer seed ash-kingdom
+threadseer beat show "Mara reveals herself at the feast"
 threadseer beat consequences "Mara reveals herself at the feast"
-```
-
-Because the global command is a symlink back to this checkout, code changes are picked up immediately. To update after pulling new code:
-
-```bash
-git pull
-pnpm install
-```
-
-Re-linking is only needed if the link is removed or your global pnpm setup changes.
-
-## Domain
-
-Node types:
-
-```text
-Beat
-Thread
-Pressure
-Secret
-State
-```
-
-Edge types:
-
-```text
-REQUIRES
-ENABLES
-BLOCKS
-REVEALS
-ESCALATES
-CREATES
+threadseer beat kills "Mara reveals herself at the feast"
 ```

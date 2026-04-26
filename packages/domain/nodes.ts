@@ -3,8 +3,12 @@ export const entityTypes = ["Character", "Faction", "Location"] as const;
 export type EntityType = (typeof entityTypes)[number];
 
 export const nodeTypes = [
+  "Sourcebook",
+  "Game",
+  "ThreadSeed",
+  "GameThread",
   "Beat",
-  "Thread",
+  "Event",
   "Pressure",
   "Secret",
   "State",
@@ -13,11 +17,13 @@ export const nodeTypes = [
 
 export type NodeType = (typeof nodeTypes)[number];
 
+export type BeatStatus = "proposed" | "live" | "collapsed" | "invalidated" | "dormant";
+
 export type StoryNode = {
   id: string;
   type: NodeType;
   title: string;
-  status?: "possible" | "canon";
+  status?: BeatStatus;
 };
 
 export function primaryNodeType(labels: string[]): NodeType {
