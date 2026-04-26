@@ -1,19 +1,33 @@
 import type { Driver } from "neo4j-driver";
 
-import type { EdgeType } from "../domain/edges.js";
-import type { BeatView, Consequence } from "../domain/consequenceView.js";
+import type { Consequence } from "../domain/consequenceView.js";
 import { createId } from "../domain/ids.js";
-import { primaryNodeType } from "../domain/nodes.js";
+import { primaryNodeType, type BeatStatus } from "../domain/nodes.js";
 import { configFromEnv } from "./connection.js";
+import { findGame } from "./gameQueries.js";
 import { ensureSchema } from "./schema.js";
+
+export type BeatView = {
+  id: string;
+  type: "Beat";
+  title: string;
+  status?: BeatStatus;
+  outgoing: Consequence[];
+  incoming: Consequence[];
+};
 
 export async function addBeat(
   driver: Driver,
-  world: string,
+  gameReference: string,
   title: string,
-  status: "possible" | "canon",
+  status: BeatStatus,
+  threadReference?: string,
 ): Promise<void> {
   await ensureSchema(driver);
+  const game = await findGame(driver, gameReference);
+  if (!game) {
+    throw new Error(`Game not found: ${gameReference}`);
+  }
 
   const session = driver.session({ database: configFromEnv().database });
 
@@ -21,16 +35,15 @@ export async function addBeat(
     await session.executeWrite((tx) =>
       tx.run(
         `
-        MERGE (b:Beat {world: $world, title: $title})
-        ON CREATE SET b.id = $id
-        SET b.status = $status
+        MERGE (b:Beat {game: $game, title: $title})
+        ON CREATE SET b.id = $id, b.createdAt = datetime()
+        SET b.status = $status, b.updatedAt = datetime()
+        WITH b
+        OPTIONAL MATCH (t:GameThread {game: $game})
+        WHERE $threadReference IS NOT NULL AND (t.id = $threadReference OR t.title = $threadReference)
+        FOREACH (_ IN CASE WHEN t IS NULL THEN [] ELSE [1] END | MERGE (b)-[:ADVANCES]->(t))
         `,
-        {
-          world,
-          title,
-          status,
-          id: createId("b"),
-        },
+        { game: game.id, title, status, id: createId("b"), threadReference: threadReference ?? null },
       ),
     );
   } finally {
@@ -38,43 +51,33 @@ export async function addBeat(
   }
 }
 
-export async function findBeat(driver: Driver, world: string, reference: string): Promise<BeatView | null> {
-  const session = driver.session({ database: configFromEnv().database });
+export async function findBeat(driver: Driver, gameReference: string, reference: string): Promise<BeatView | null> {
+  const game = await findGame(driver, gameReference);
+  if (!game) {
+    throw new Error(`Game not found: ${gameReference}`);
+  }
 
+  const session = driver.session({ database: configFromEnv().database });
   try {
     const result = await session.executeRead((tx) =>
       tx.run(
         `
-        MATCH (b:Beat {world: $world})
+        MATCH (b:Beat {game: $game})
         WHERE b.id = $reference OR b.title = $reference
         OPTIONAL MATCH (b)-[out]->(target)
-        OPTIONAL MATCH (source)-[in]->(b)
-        RETURN b {
-          .id,
-          .title,
-          .status
-        } AS beat,
-        collect(DISTINCT {
-          relationship: type(out),
-          title: target.title,
-          labels: labels(target)
-        }) AS outgoing,
-        collect(DISTINCT {
-          relationship: type(in),
-          title: source.title,
-          labels: labels(source)
-        }) AS incoming
+        OPTIONAL MATCH (source)-[incoming]->(b)
+        RETURN b { .id, .title, .status } AS beat,
+          collect(DISTINCT { relationship: type(out), title: target.title, labels: labels(target) }) AS outgoing,
+          collect(DISTINCT { relationship: type(incoming), title: source.title, labels: labels(source) }) AS incoming
+        LIMIT 1
         `,
-        { world, reference },
+        { game: game.id, reference },
       ),
     );
 
     const record = result.records[0];
-    if (!record) {
-      return null;
-    }
-
-    const beat = record.get("beat") as { id: string; title: string; status?: "possible" | "canon" };
+    if (!record) return null;
+    const beat = record.get("beat") as { id: string; title: string; status?: BeatStatus };
     return {
       id: beat.id,
       title: beat.title,
@@ -88,14 +91,68 @@ export async function findBeat(driver: Driver, world: string, reference: string)
   }
 }
 
+export async function collapseBeat(driver: Driver, gameReference: string, beatReference: string): Promise<{
+  eventTitle: string;
+  beatTitle: string;
+  revealedSecrets: string[];
+  activatedStates: string[];
+  escalatedPressures: string[];
+  invalidatedBeats: string[];
+} | null> {
+  await ensureSchema(driver);
+  const game = await findGame(driver, gameReference);
+  if (!game) {
+    throw new Error(`Game not found: ${gameReference}`);
+  }
+  const session = driver.session({ database: configFromEnv().database });
+  try {
+    const result = await session.executeWrite((tx) =>
+      tx.run(
+        `
+        MATCH (b:Beat {game: $game})
+        WHERE b.id = $beat OR b.title = $beat
+        MERGE (e:Event {game: $game, title: b.title})
+        ON CREATE SET e.id = $eventId, e.createdAt = datetime()
+        SET e.updatedAt = datetime()
+        MERGE (e)-[:REALIZED]->(b)
+        SET b.status = 'collapsed', b.updatedAt = datetime()
+        WITH b, e
+        OPTIONAL MATCH (b)-[:REVEALS]->(secret:Secret)
+        FOREACH (_ IN CASE WHEN secret IS NULL THEN [] ELSE [1] END | MERGE (e)-[:REVEALED]->(secret))
+        WITH b, e, collect(DISTINCT secret.title) AS revealedSecrets
+        OPTIONAL MATCH (b)-[:CREATES]->(state:State)
+        FOREACH (_ IN CASE WHEN state IS NULL THEN [] ELSE [1] END | MERGE (e)-[:ACTIVATED]->(state))
+        WITH b, e, revealedSecrets, collect(DISTINCT state.title) AS activatedStates
+        OPTIONAL MATCH (b)-[:ESCALATES]->(pressure:Pressure)
+        FOREACH (_ IN CASE WHEN pressure IS NULL THEN [] ELSE [1] END | MERGE (e)-[:ESCALATED]->(pressure))
+        WITH b, e, revealedSecrets, activatedStates, collect(DISTINCT pressure.title) AS escalatedPressures
+        OPTIONAL MATCH (b)-[:BLOCKS]->(blocked:Beat {game: $game})
+        SET blocked.status = 'invalidated', blocked.updatedAt = datetime()
+        FOREACH (_ IN CASE WHEN blocked IS NULL THEN [] ELSE [1] END | MERGE (e)-[:INVALIDATED]->(blocked))
+        RETURN b.title AS beatTitle, e.title AS eventTitle,
+          [x IN revealedSecrets WHERE x IS NOT NULL] AS revealedSecrets,
+          [x IN activatedStates WHERE x IS NOT NULL] AS activatedStates,
+          [x IN escalatedPressures WHERE x IS NOT NULL] AS escalatedPressures,
+          [x IN collect(DISTINCT blocked.title) WHERE x IS NOT NULL] AS invalidatedBeats
+        LIMIT 1
+        `,
+        { game: game.id, beat: beatReference, eventId: createId("ev") },
+      ),
+    );
 
-export async function outgoingConsequences(
-  driver: Driver,
-  world: string,
-  reference: string,
-): Promise<Consequence[] | null> {
-  const beat = await findBeat(driver, world, reference);
-  return beat?.outgoing ?? null;
+    const record = result.records[0];
+    if (!record) return null;
+    return {
+      eventTitle: record.get("eventTitle") as string,
+      beatTitle: record.get("beatTitle") as string,
+      revealedSecrets: record.get("revealedSecrets") as string[],
+      activatedStates: record.get("activatedStates") as string[],
+      escalatedPressures: record.get("escalatedPressures") as string[],
+      invalidatedBeats: record.get("invalidatedBeats") as string[],
+    };
+  } finally {
+    await session.close();
+  }
 }
 
 function toConsequences(value: unknown): Consequence[] {
@@ -104,34 +161,14 @@ function toConsequences(value: unknown): Consequence[] {
   }
 
   return value.flatMap((item) => {
-    if (!isRawConsequence(item)) {
+    if (!item || typeof item !== "object") {
+      return [];
+    }
+    const candidate = item as Record<string, unknown>;
+    if (typeof candidate.relationship !== "string" || typeof candidate.title !== "string" || !Array.isArray(candidate.labels)) {
       return [];
     }
 
-    return [
-      {
-        relationship: item.relationship,
-        title: item.title,
-        type: primaryNodeType(item.labels),
-      },
-    ];
+    return [{ relationship: candidate.relationship as never, title: candidate.title, type: primaryNodeType(candidate.labels as string[]) }];
   });
-}
-
-function isRawConsequence(value: unknown): value is {
-  relationship: EdgeType;
-  title: string;
-  labels: string[];
-} {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.relationship === "string" &&
-    typeof candidate.title === "string" &&
-    Array.isArray(candidate.labels) &&
-    candidate.labels.every((label) => typeof label === "string")
-  );
 }
