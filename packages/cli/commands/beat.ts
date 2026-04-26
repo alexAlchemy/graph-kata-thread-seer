@@ -7,13 +7,23 @@ import { addBeat, findBeat, outgoingConsequences } from "../../neo4j/beatQueries
 import { findWorld, worldHandle } from "../../neo4j/worldQueries.js";
 
 export function beatCommand(): Command {
-  const beat = new Command("beat").description("Explore beat consequences");
+  const beat = new Command("beat")
+    .description("Explore beat consequences")
+    .addHelpText(
+      "after",
+      `
+
+World selection:
+  Beat commands use the active world set by "threadseer world use".
+  Pass --world to override it for one command.
+  Without either, commands return "Please set active world".`,
+    );
 
   beat
     .command("show")
     .description("Show a beat and its direct graph relationships")
     .argument("<title>", "beat title")
-    .option("-w, --world <world>", "story world id/key")
+    .option("-w, --world <world>", "story world id, key, or name; defaults to active world")
     .action(async (title: string, options: { world?: string }) => {
       const world = await resolveWorldOption(options.world);
       const view = await withDriver((driver) => findBeat(driver, world, title));
@@ -28,7 +38,7 @@ export function beatCommand(): Command {
     .command("consequences")
     .description("Show what a beat requires, reveals, creates, escalates, and enables")
     .argument("<title>", "beat title")
-    .option("-w, --world <world>", "story world id/key")
+    .option("-w, --world <world>", "story world id, key, or name; defaults to active world")
     .action(async (title: string, options: { world?: string }) => {
       const world = await resolveWorldOption(options.world);
       const consequences = await withDriver((driver) =>
@@ -45,7 +55,7 @@ export function beatCommand(): Command {
     .command("kills")
     .description("Show futures directly blocked or invalidated by a beat")
     .argument("<title>", "beat title")
-    .option("-w, --world <world>", "story world id/key")
+    .option("-w, --world <world>", "story world id, key, or name; defaults to active world")
     .action(async (title: string, options: { world?: string }) => {
       const world = await resolveWorldOption(options.world);
       const consequences = await withDriver((driver) =>
@@ -63,7 +73,7 @@ export function beatCommand(): Command {
     .description("Add or update a beat without wiring relationships yet")
     .argument("<title>", "beat title")
     .option("--status <status>", "beat status: possible or canon", "possible")
-    .option("-w, --world <world>", "story world id/key")
+    .option("-w, --world <world>", "story world id, key, or name; defaults to active world")
     .action(async (title: string, options: { status: string; world?: string }) => {
       if (options.status !== "possible" && options.status !== "canon") {
         throw new Error(`Unsupported beat status: ${options.status}`);

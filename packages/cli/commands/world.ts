@@ -5,11 +5,20 @@ import { withDriver } from "../../neo4j/connection.js";
 import { createWorld, findWorld, worldHandle } from "../../neo4j/worldQueries.js";
 
 export function worldCommand(): Command {
-  const world = new Command("world").description("Manage story worlds");
+  const world = new Command("world")
+    .description("Manage story worlds")
+    .addHelpText(
+      "after",
+      `
+
+Active world:
+  "world create" and "world use" persist the active world for later commands.
+  Config is stored at ~/.config/threadseer/config.json unless XDG_CONFIG_HOME is set.`,
+    );
 
   world
     .command("create")
-    .description("Create or update a story world")
+    .description("Create or update a story world and make it active")
     .argument("<name>", "world name")
     .argument("<description>", "world description")
     .action(async (name: string, description: string) => {

@@ -7,7 +7,7 @@ import { findWorld, worldHandle } from "../../neo4j/worldQueries.js";
 
 export function seedCommand(): Command {
   return new Command("seed")
-    .description("Load a built-in story graph seed")
+    .description("Load a built-in story graph seed and make its world active")
     .argument("<name>", "seed name, e.g. ash-kingdom")
     .action(async (name: string) => {
       const graph = seedForName(name);
